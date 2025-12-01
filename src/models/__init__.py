@@ -1,2 +1,5 @@
-"""Models module."""
+from .paper import Paper
 
+__all__ = [
+    "Paper",
+]

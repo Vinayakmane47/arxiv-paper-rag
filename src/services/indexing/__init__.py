@@ -1,2 +1,0 @@
-"""Indexing service module."""
-

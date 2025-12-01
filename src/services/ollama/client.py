@@ -1,27 +1,27 @@
+import logging
+from typing import Dict
+
 import httpx
-from src.config import get_settings
+from src.config import Settings
+
+logger = logging.getLogger(__name__)
+
 
 class OllamaClient:
-    def __init__(self):
-        self.settings = get_settings()
-        self.base_url = self.settings.ollama_host
-        self.model = self.settings.ollama_model
-    
-    async def health_check(self) -> dict:
-        """Check if Ollama is running."""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{self.base_url}/api/version")
-            return response.json()
-    
-    async def generate(self, prompt: str) -> str:
-        """Generate text from LLM."""
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False
-                }
-            )
-            return response.json()["response"]
+    """Minimal Ollama client for Week 1 health checks."""
+
+    def __init__(self, settings: Settings):
+        self.base_url = settings.ollama_host
+
+    async def health_check(self) -> Dict[str, str]:
+        """Check if Ollama service is available."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{self.base_url}/api/tags")
+                if response.status_code == 200:
+                    return {"status": "healthy", "message": "Ollama service is running"}
+                else:
+                    return {"status": "unhealthy", "message": f"HTTP {response.status_code}"}
+        except Exception as e:
+            logger.error(f"Ollama health check failed: {e}")
+            return {"status": "unhealthy", "message": str(e)}

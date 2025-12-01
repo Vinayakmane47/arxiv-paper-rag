@@ -1,2 +1,0 @@
-"""Embeddings service module."""
-

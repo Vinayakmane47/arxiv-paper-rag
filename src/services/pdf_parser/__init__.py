@@ -1,2 +1,0 @@
-"""PDF parser service module."""
-

@@ -1,2 +1,0 @@
-"""ArXiv service module."""
-
