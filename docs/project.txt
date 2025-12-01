@@ -1,0 +1,177 @@
+EXECUTION FLOW: main.py to Endpoints
+=====================================
+
+STARTUP FLOW (Application Initialization)
+------------------------------------------
+
+[main.py] uvicorn.run(app, ...)
+  calls --> [FastAPI] app creation
+  calls --> [main.py] lifespan() function
+
+[main.py] lifespan()
+  calls --> [config.py] get_settings()
+    Function: Loads application configuration from .env file
+    Returns: Settings object with all config values
+    
+  calls --> [db/factory.py] make_database()
+    Function: Factory function to create database instance
+    calls --> [config.py] get_settings() (cached)
+      Function: Get database connection settings
+    calls --> [db/interfaces/postgresql.py] PostgreSQLDatabase(config)
+      Function: Initialize PostgreSQL database class
+    calls --> [db/interfaces/postgresql.py] database.startup()
+      Function: Establish database connection and setup
+      calls --> [SQLAlchemy] create_engine()
+        Function: Create database engine with connection pool
+      calls --> [SQLAlchemy] sessionmaker()
+        Function: Create session factory for database sessions
+      calls --> [SQLAlchemy] engine.connect()
+        Function: Test database connection
+      calls --> [SQLAlchemy] Base.metadata.create_all()
+        Function: Create database tables if they don't exist
+
+  calls --> [FastAPI] app.state.settings = settings
+    Function: Store settings in application state
+    
+  calls --> [FastAPI] app.state.database = database
+    Function: Store database instance in application state
+    
+  calls --> [main.py] app.include_router()
+    Function: Register API route handlers
+    Registers: ping, papers, ask routers
+
+Summary of startup tasks:
+  • Load configuration from environment variables
+  • Create and configure database connection
+  • Initialize database tables
+  • Store settings and database in app state
+  • Register all API endpoint routers
+
+
+REQUEST FLOW (API Endpoints)
+----------------------------
+
+[GET /api/v1/ping]
+  calls --> [routers/ping.py] ping()
+    Function: Simple connectivity test endpoint
+    Returns: JSON response with status "ok"
+
+[GET /api/v1/health]
+  calls --> [routers/ping.py] health_check()
+    Function: Comprehensive health check endpoint
+    
+    calls --> [dependencies.py] get_settings()
+      Function: Inject settings dependency
+      Returns: Settings from app.state.settings
+      
+    calls --> [dependencies.py] get_database()
+      Function: Inject database dependency
+      Returns: Database instance from app.state.database
+      
+    calls --> [db/interfaces/postgresql.py] database.get_session()
+      Function: Get database session context manager
+      calls --> [SQLAlchemy] session_factory()
+        Function: Create new database session
+      calls --> [SQLAlchemy] session.execute(text("SELECT 1"))
+        Function: Execute test query to verify connection
+      
+    calls --> [services/ollama/client.py] OllamaClient(settings)
+      Function: Initialize Ollama client
+      calls --> [services/ollama/client.py] __init__()
+        Function: Set base URL from settings
+      calls --> [services/ollama/client.py] health_check()
+        Function: Check Ollama service availability
+        calls --> [httpx] HTTP GET to Ollama API
+          Function: Make HTTP request to /api/tags endpoint
+          
+    calls --> [schemas/health.py] HealthResponse()
+      Function: Create health response model
+    Returns: HealthResponse with service statuses
+
+[GET /api/v1/papers/{arxiv_id}]
+  calls --> [routers/papers.py] get_paper_details()
+    Function: Retrieve paper details by arXiv ID
+    
+    calls --> [dependencies.py] get_db_session()
+      Function: Inject database session dependency
+      calls --> [dependencies.py] get_database()
+        Function: Get database instance
+      calls --> [db/interfaces/postgresql.py] database.get_session()
+        Function: Create database session context manager
+        
+    calls --> [repositories/paper.py] PaperRepository(session)
+      Function: Initialize paper repository
+      calls --> [repositories/paper.py] __init__()
+        Function: Store database session
+        
+    calls --> [repositories/paper.py] paper_repo.get_by_arxiv_id(arxiv_id)
+      Function: Query database for paper by arXiv ID
+      calls --> [SQLAlchemy] session.query(Paper).filter(...).first()
+        Function: Execute database query
+        Uses --> [models/paper.py] Paper model
+          Function: SQLAlchemy ORM model for papers table
+          
+    calls --> [schemas/paper.py] PaperResponse.model_validate(paper)
+      Function: Validate and serialize paper data to response schema
+    Returns: PaperResponse with paper details
+
+[POST /api/v1/ask]
+  calls --> [routers/ask.py] ask_question()
+    Function: Question answering endpoint (mock implementation)
+    
+    calls --> [schemas/ask.py] AskRequest validation
+      Function: Validate incoming request data
+      
+    calls --> [schemas/ask.py] AskResponse()
+      Function: Create mock response
+    Returns: AskResponse with mock answer and sources
+
+Summary of request flow tasks:
+  • Inject dependencies (settings, database, sessions)
+  • Validate incoming request data
+  • Execute database queries through repositories
+  • Make external API calls (Ollama service)
+  • Serialize data to response schemas
+  • Return JSON responses to client
+
+
+SHUTDOWN FLOW
+-------------
+
+[main.py] lifespan() cleanup
+  calls --> [db/interfaces/postgresql.py] database.teardown()
+    Function: Cleanup database connections
+    calls --> [SQLAlchemy] engine.dispose()
+      Function: Close all database connections and release pool
+
+Summary of shutdown tasks:
+  • Close database connections
+  • Release connection pool resources
+
+
+DEPENDENCY INJECTION CHAIN
+--------------------------
+
+[FastAPI Request] incoming request
+  calls --> [dependencies.py] get_settings()
+    Function: Get settings from request state
+    Returns: request.app.state.settings
+    
+  calls --> [dependencies.py] get_database()
+    Function: Get database from request state
+    Returns: request.app.state.database
+    
+  calls --> [dependencies.py] get_db_session()
+    Function: Get database session context manager
+    calls --> [dependencies.py] get_database()
+      Function: Get database instance
+    calls --> [db/interfaces/postgresql.py] database.get_session()
+      Function: Create session context manager
+      Yields: SQLAlchemy Session object
+      Auto-closes: Session on exit
+
+Summary of dependency injection:
+  • FastAPI automatically resolves dependencies
+  • Dependencies are injected into route handlers
+  • Database sessions are managed as context managers
+  • Sessions automatically close after request completes

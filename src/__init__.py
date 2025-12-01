@@ -1,2 +1,0 @@
-"""ArXiv Paper RAG package."""
-
