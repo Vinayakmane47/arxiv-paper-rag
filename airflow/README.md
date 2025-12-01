@@ -30,4 +30,3 @@ The Airflow service is configured to run via Docker Compose and can be accessed 
 In later weeks, this directory will contain:
 - arXiv paper fetching DAGs
 - PDF processing workflows
-- Data pipeline orchestration

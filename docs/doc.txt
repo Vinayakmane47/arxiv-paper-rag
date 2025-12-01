@@ -1,0 +1,572 @@
+================================================================================
+MOTHER-OF-AI PROJECT: ARXIV PAPER RAG SYSTEM - ARCHITECTURE DOCUMENTATION
+================================================================================
+
+This document provides a high-level overview of the arXiv Paper RAG system
+architecture, explaining how all components connect and work together.
+
+================================================================================
+PROJECT OVERVIEW
+================================================================================
+
+This is a production-grade RAG (Retrieval-Augmented Generation) system designed
+to automatically fetch, process, and answer questions about arXiv research papers.
+The system follows a layered architecture pattern with clear separation of
+concerns, making it maintainable and scalable.
+
+The project is built step-by-step (Week 1 foundation, with future enhancements
+planned), focusing on learning production AI engineering practices.
+
+================================================================================
+CORE ARCHITECTURE PRINCIPLES
+================================================================================
+
+1. LAYERED ARCHITECTURE
+   - API Layer (Routers) -> Business Logic (Services) -> Data Access (Repositories) -> Database
+   - Each layer has a specific responsibility and communicates only with adjacent layers
+
+2. DEPENDENCY INJECTION
+   - Services and dependencies are injected rather than hardcoded
+   - Makes testing easier and allows flexible configuration
+
+3. INTERFACE-BASED DESIGN
+   - Database operations use abstract base classes
+   - Allows swapping implementations (e.g., PostgreSQL, MongoDB) without changing business logic
+
+4. SCHEMA VALIDATION
+   - Pydantic schemas validate all API inputs/outputs
+   - Ensures data integrity and provides automatic API documentation
+
+================================================================================
+MAIN BUILDING BLOCKS
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    APPLICATION ENTRY POINT                      │
+│                         src/main.py                             │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    CONFIGURATION LAYER                          │
+│                      src/config.py                              │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    API ROUTERS (Endpoints)                      │
+│              src/routers/ping.py, papers.py, ask.py             │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    DEPENDENCY INJECTION                         │
+│                   src/dependencies.py                           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    BUSINESS LOGIC LAYER                        │
+│                    src/services/                                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    DATA ACCESS LAYER                           │
+│              src/repositories/paper.py                           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    DATABASE ABSTRACTION                        │
+│         src/db/factory.py, src/db/interfaces/                   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    DATABASE MODELS                              │
+│                    src/models/paper.py                          │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    EXTERNAL SERVICES                           │
+│         PostgreSQL, OpenSearch, Ollama, Airflow                │
+└─────────────────────────────────────────────────────────────────┘
+
+================================================================================
+COMPONENT EXPLANATIONS
+================================================================================
+
+1. APPLICATION ENTRY POINT (src/main.py)
+   ────────────────────────────────────────────────────────────────
+   PURPOSE: Initializes the FastAPI application and sets up the application
+            lifecycle.
+
+   KEY RESPONSIBILITIES:
+   - Creates FastAPI app instance with metadata (title, version, description)
+   - Manages application lifespan (startup and shutdown)
+   - Initializes core services (settings, database) and stores them in app.state
+   - Registers all API routers
+   - Sets up logging configuration
+
+   WHY WE NEED IT:
+   - Central entry point that orchestrates all components
+   - Lifespan management ensures proper resource initialization and cleanup
+   - App.state provides a way to share services across the application
+
+   CONNECTIONS:
+   - Imports and uses config.py for settings
+   - Uses db/factory.py to create database instance
+   - Includes routers from routers/ directory
+   - Stores services in app.state for dependency injection
+
+
+2. CONFIGURATION MANAGEMENT (src/config.py)
+   ────────────────────────────────────────────────────────────────
+   PURPOSE: Centralized configuration management using Pydantic Settings.
+
+   KEY RESPONSIBILITIES:
+   - Defines all application settings (database URLs, service hosts, etc.)
+   - Loads configuration from environment variables and .env file
+   - Validates configuration values
+   - Provides type-safe access to settings throughout the application
+
+   WHY WE NEED IT:
+   - Single source of truth for all configuration
+   - Environment-based configuration (dev, staging, production)
+   - Type safety prevents configuration errors
+   - Easy to test with different configurations
+
+   CONNECTIONS:
+   - Used by main.py to initialize settings
+   - Used by db/factory.py to configure database
+   - Used by services (e.g., OllamaClient) for service URLs
+   - Injected into routers via dependencies.py
+
+
+3. API ROUTERS (src/routers/)
+   ────────────────────────────────────────────────────────────────
+   PURPOSE: Define HTTP endpoints and handle incoming API requests.
+
+   ROUTERS:
+   
+   a) ping.py - Health and connectivity endpoints
+      - /ping: Simple connectivity test
+      - /health: Comprehensive health check for all services
+      - Checks database, Ollama, and other service connectivity
+   
+   b) papers.py - Paper management endpoints
+      - GET /papers/{arxiv_id}: Retrieve paper details by arXiv ID
+      - Validates arXiv ID format
+      - Returns paper metadata from database
+   
+   c) ask.py - Question answering endpoint (Week 1: Mock implementation)
+      - POST /ask: Ask questions about papers
+      - Currently returns mock data
+      - Future: Will use RAG pipeline to answer questions
+
+   WHY WE NEED THEM:
+   - RESTful API interface for external clients
+   - Automatic OpenAPI/Swagger documentation generation
+   - Request validation through Pydantic schemas
+   - Clear separation of endpoint logic
+
+   CONNECTIONS:
+   - Use schemas/ for request/response validation
+   - Use dependencies.py for dependency injection
+   - Call repositories/ for data access
+   - Use services/ for business logic
+
+
+4. DEPENDENCY INJECTION (src/dependencies.py)
+   ────────────────────────────────────────────────────────────────
+   PURPOSE: Provides FastAPI dependency injection for shared resources.
+
+   KEY FUNCTIONS:
+   - get_settings(): Returns application settings (cached)
+   - get_database(): Retrieves database instance from app.state
+   - get_db_session(): Provides database session context manager
+   - Placeholders for future services (PDF parser, OpenSearch, LLM)
+
+   WHY WE NEED IT:
+   - Enables testability (can inject mock dependencies)
+   - Manages resource lifecycle (e.g., database sessions)
+   - Reduces coupling between components
+   - Follows FastAPI best practices
+
+   CONNECTIONS:
+   - Used by all routers to get database sessions
+   - Accesses app.state set by main.py
+   - Provides type hints for better IDE support
+
+
+5. DATA MODELS (src/models/paper.py)
+   ────────────────────────────────────────────────────────────────
+   PURPOSE: SQLAlchemy ORM models representing database tables.
+
+   KEY MODEL:
+   - Paper: Represents an arXiv paper with fields:
+     * id (UUID primary key)
+     * arxiv_id (unique identifier from arXiv)
+     * title, authors, abstract, categories
+     * published_date, pdf_url
+     * created_at, updated_at (timestamps)
+
+   WHY WE NEED IT:
+   - Maps database tables to Python objects
+   - Provides type safety for database operations
+   - Handles relationships between tables (future)
+   - Automatic table creation via SQLAlchemy
+
+   CONNECTIONS:
+   - Used by repositories/paper.py for database queries
+   - Referenced by schemas/paper.py for API serialization
+   - Managed by database abstraction layer
+
+
+6. REPOSITORIES (src/repositories/paper.py)
+   ────────────────────────────────────────────────────────────────
+   PURPOSE: Data access layer that abstracts database operations.
+
+   KEY METHODS:
+   - create(): Insert new paper into database
+   - get_by_arxiv_id(): Retrieve paper by arXiv ID
+   - get_by_id(): Retrieve paper by UUID
+   - get_all(): List papers with pagination
+   - update(): Update existing paper
+   - upsert(): Create or update paper (idempotent)
+
+   WHY WE NEED IT:
+   - Separates business logic from database queries
+   - Makes database operations reusable
+   - Easier to test (can mock repository)
+   - Can swap database implementations without changing business logic
+
+   CONNECTIONS:
+   - Uses models/paper.py for database operations
+   - Called by routers/papers.py
+   - Uses database session from dependencies.py
+
+
+7. SCHEMAS (src/schemas/)
+   ────────────────────────────────────────────────────────────────
+   PURPOSE: Pydantic models for API request/response validation.
+
+   SCHEMAS:
+   
+   a) paper.py
+      - PaperBase: Common paper fields
+      - PaperCreate: Schema for creating papers
+      - PaperResponse: Schema for API responses
+      - PaperSearchResponse: Schema for search results
+   
+   b) health.py
+      - ServiceStatus: Individual service health status
+      - HealthResponse: Overall health check response
+   
+   c) ask.py
+      - AskRequest: Question input schema
+      - AskResponse: Answer with sources schema
+      - PaperSource: Source paper information
+
+   WHY WE NEED THEM:
+   - Automatic request validation
+   - Automatic API documentation generation
+   - Type safety for API contracts
+   - Serialization/deserialization of data
+
+   CONNECTIONS:
+   - Used by routers/ for request/response validation
+   - Converted to/from models/paper.py in repositories
+
+
+8. DATABASE ABSTRACTION (src/db/)
+   ────────────────────────────────────────────────────────────────
+   PURPOSE: Abstract database operations to support multiple database types.
+
+   COMPONENTS:
+   
+   a) factory.py
+      - make_database(): Factory function that creates database instance
+      - Reads settings and creates appropriate database implementation
+      - Currently creates PostgreSQLDatabase instance
+   
+   b) interfaces/base.py
+      - BaseDatabase: Abstract base class for database operations
+      - BaseRepository: Abstract base class for repository pattern
+      - Defines contract that all database implementations must follow
+   
+   c) interfaces/postgresql.py
+      - PostgreSQLDatabase: Concrete PostgreSQL implementation
+      - PostgreSQLSettings: PostgreSQL-specific configuration
+      - Manages SQLAlchemy engine and session factory
+      - Handles connection pooling and lifecycle
+
+   WHY WE NEED IT:
+   - Allows switching databases without changing business logic
+   - Provides consistent interface for database operations
+   - Manages connection pooling and resource cleanup
+   - Makes testing easier (can use in-memory database)
+
+   CONNECTIONS:
+   - Called by main.py during startup
+   - Used by dependencies.py to provide database sessions
+   - Used by repositories/ for database operations
+
+
+9. SERVICES (src/services/)
+   ────────────────────────────────────────────────────────────────
+   PURPOSE: Business logic and external service integrations.
+
+   CURRENT SERVICES:
+   
+   a) ollama/client.py
+      - OllamaClient: Client for interacting with Ollama LLM service
+      - health_check(): Verifies Ollama service availability
+      - Future: Will include text generation methods
+
+   FUTURE SERVICES (Placeholders):
+   - arxiv/: Fetch papers from arXiv API
+   - pdf_parser/: Parse PDF content using Docling
+   - embeddings/: Generate embeddings for text chunks
+   - opensearch/: Index and search papers
+   - indexing/: Manage indexing workflows
+
+   WHY WE NEED THEM:
+   - Encapsulate external service interactions
+   - Centralize business logic
+   - Make services testable and mockable
+   - Reusable across different parts of the application
+
+   CONNECTIONS:
+   - Used by routers/ for business operations
+   - Called by health check endpoints
+   - Will be used by Airflow DAGs for batch processing
+
+
+10. EXCEPTIONS (src/exceptions.py)
+    ────────────────────────────────────────────────────────────────
+    PURPOSE: Custom exception classes for error handling.
+
+    EXCEPTION TYPES:
+    - RepositoryException: Base for repository errors
+    - PaperNotFound: Raised when paper doesn't exist
+    - PaperNotSaved: Raised when paper save fails
+    - ParsingException: Base for parsing errors
+    - OpenSearchException: OpenSearch-related errors
+    - LLMException: LLM-related errors
+    - ConfigurationError: Configuration validation errors
+
+    WHY WE NEED IT:
+    - Provides specific error types for better error handling
+    - Makes error messages more meaningful
+    - Allows catching specific exceptions in different layers
+    - Improves debugging and logging
+
+    CONNECTIONS:
+    - Raised by repositories/ when operations fail
+    - Caught by routers/ and converted to HTTP responses
+    - Used by services/ for service-specific errors
+
+
+11. MIDDLEWARES (src/middlewares.py)
+    ────────────────────────────────────────────────────────────────
+    PURPOSE: Request/response processing and logging.
+
+    CURRENT FUNCTIONALITY:
+    - log_request(): Logs incoming requests
+    - log_error(): Logs errors
+
+    WHY WE NEED IT:
+    - Centralized request logging
+    - Error tracking and monitoring
+    - Future: Authentication, rate limiting, CORS
+
+    CONNECTIONS:
+    - Used by FastAPI app for request processing
+    - Can access request/response data
+
+
+12. AIRFLOW INTEGRATION (airflow/)
+    ────────────────────────────────────────────────────────────────
+    PURPOSE: Workflow orchestration for batch processing tasks.
+
+    COMPONENTS:
+    - dags/hello_world_dag.py: Test DAG for Week 1
+      * hello_world task: Simple test function
+      * check_services task: Verifies API and database connectivity
+    - init-db.sql: Database initialization script
+    - Dockerfile: Airflow container configuration
+
+    WHY WE NEED IT:
+    - Automates paper fetching and processing workflows
+    - Schedules periodic tasks (daily paper ingestion)
+    - Manages complex multi-step pipelines
+    - Provides retry logic and error handling
+    - Monitors workflow execution
+
+    FUTURE DAGS:
+    - Paper fetching from arXiv
+    - PDF parsing and processing
+    - Embedding generation
+    - OpenSearch indexing
+    - Data quality checks
+
+    CONNECTIONS:
+    - Runs in separate container
+    - Accesses same database and services as API
+    - Can trigger API endpoints or call services directly
+
+
+13. INFRASTRUCTURE (compose.yml, Dockerfile, Makefile)
+    ────────────────────────────────────────────────────────────────
+    PURPOSE: Containerization and service orchestration.
+
+    SERVICES:
+    - api: FastAPI application container
+    - postgres: PostgreSQL 16 database
+    - opensearch: OpenSearch 2.19 search engine
+    - opensearch-dashboards: OpenSearch UI
+    - airflow: Apache Airflow workflow orchestrator
+    - ollama: Local LLM service
+
+    WHY WE NEED IT:
+    - Consistent development environment
+    - Easy deployment and scaling
+    - Service isolation and health checks
+    - Network configuration for inter-service communication
+
+    CONNECTIONS:
+    - All services on shared Docker network
+    - Services communicate via service names
+    - Volumes for persistent data storage
+    - Health checks ensure proper startup order
+
+================================================================================
+DATA FLOW EXAMPLES
+================================================================================
+
+EXAMPLE 1: GET PAPER BY ARXIV ID
+───────────────────────────────────────────────────────────────────────────────
+1. Client sends GET request to /api/v1/papers/2401.00001
+2. FastAPI routes to routers/papers.py::get_paper_details()
+3. Router uses dependencies.py::get_db_session() to get database session
+4. Router creates PaperRepository instance with session
+5. Repository calls get_by_arxiv_id() which queries models/paper.py
+6. Database abstraction layer (PostgreSQLDatabase) executes SQL query
+7. Result mapped to Paper model
+8. Paper model converted to PaperResponse schema
+9. Response returned to client
+
+EXAMPLE 2: HEALTH CHECK
+───────────────────────────────────────────────────────────────────────────────
+1. Client sends GET request to /api/v1/health
+2. FastAPI routes to routers/ping.py::health_check()
+3. Router uses dependencies.py to get settings and database
+4. Router tests database connection via database.get_session()
+5. Router creates OllamaClient from services/ollama/client.py
+6. OllamaClient checks Ollama service health
+7. Results aggregated into HealthResponse schema
+8. Response returned with status of all services
+
+EXAMPLE 3: FUTURE RAG PIPELINE (Week 5+)
+───────────────────────────────────────────────────────────────────────────────
+1. Client sends POST request to /api/v1/ask with question
+2. Router validates AskRequest schema
+3. Service layer calls OpenSearch service to find relevant papers
+4. OpenSearch returns ranked paper chunks
+5. Service layer calls LLM service (Ollama) with question and context
+6. LLM generates answer based on retrieved context
+7. Response includes answer and source papers
+8. Response returned as AskResponse schema
+
+================================================================================
+KEY DESIGN PATTERNS
+================================================================================
+
+1. REPOSITORY PATTERN
+   - Abstracts data access logic
+   - Makes code testable and maintainable
+   - Allows swapping data sources
+
+2. DEPENDENCY INJECTION
+   - Services injected rather than created directly
+   - Enables testing with mocks
+   - Reduces coupling
+
+3. FACTORY PATTERN
+   - make_database() creates appropriate database instance
+   - Centralizes object creation logic
+   - Easy to extend with new database types
+
+4. STRATEGY PATTERN
+   - BaseDatabase interface allows different implementations
+   - Can switch between PostgreSQL, MongoDB, etc.
+
+5. SCHEMA VALIDATION
+   - Pydantic models validate all data
+   - Automatic API documentation
+   - Type safety throughout
+
+================================================================================
+FUTURE ENHANCEMENTS (Planned)
+================================================================================
+
+WEEK 2: Data Ingestion
+- arXiv API integration service
+- PDF parsing with Docling
+- Automated paper fetching workflows
+
+WEEK 3: Search Infrastructure
+- OpenSearch hybrid search (BM25 + semantic)
+- Embedding generation service
+- Vector indexing
+
+WEEK 4: Retrieval Optimization
+- Context-aware chunking
+- Retrieval evaluation (nDCG metrics)
+- Query expansion
+
+WEEK 5: RAG Pipeline
+- Full RAG implementation
+- LLM integration
+- Prompt optimization
+
+WEEK 6: Observability
+- Langfuse integration
+- A/B testing framework
+- Production deployment
+
+================================================================================
+TESTING STRATEGY
+================================================================================
+
+STRUCTURE:
+- tests/unit/: Unit tests for individual components
+- tests/api/: Integration tests for API endpoints
+- tests/integration/: End-to-end tests
+
+APPROACH:
+- Mock external services (database, Ollama, OpenSearch)
+- Test each layer independently
+- Use testcontainers for integration tests
+- FastAPI TestClient for API testing
+
+================================================================================
+SUMMARY
+================================================================================
+
+This architecture provides:
+- Clear separation of concerns
+- Scalable and maintainable codebase
+- Easy testing and development
+- Production-ready patterns
+- Step-by-step learning approach
+
+The system is designed to grow from a simple Week 1 foundation to a full
+production RAG system, with each component having a clear purpose and
+well-defined connections to other components.
+
+================================================================================
+
