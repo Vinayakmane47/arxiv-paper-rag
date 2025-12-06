@@ -29,4 +29,3 @@ airflow users create \
 echo "Starting Airflow webserver and scheduler..."
 airflow webserver --port 8080 --daemon &
 airflow scheduler
-
