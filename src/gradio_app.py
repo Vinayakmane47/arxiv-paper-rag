@@ -21,6 +21,9 @@ async def stream_response(
         yield "Please enter a question."
         return
 
+    # Show initial loading message
+    yield "🔍 **Searching papers and generating answer...**\n\n*This may take 30-60 seconds. Please wait...*"
+
     # Parse categories
     category_list = [cat.strip() for cat in categories.split(",") if cat.strip()] if categories else None
 
@@ -29,7 +32,9 @@ async def stream_response(
 
     try:
         url = f"{API_BASE_URL}/stream"
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # Increased timeout to 180 seconds (3 minutes) for RAG pipeline
+        timeout = httpx.Timeout(180.0, connect=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream("POST", url, json=payload, headers={"Accept": "text/plain"}) as response:
                 if response.status_code != 200:
                     yield f"Error: API returned status {response.status_code}"
@@ -101,10 +106,14 @@ async def stream_response(
                         except json.JSONDecodeError:
                             continue  # Skip malformed JSON lines
 
+    except httpx.TimeoutException as e:
+        yield f"⏱️ Request timed out after 3 minutes. The RAG pipeline may be processing a complex query.\n\n**Troubleshooting:**\n- Try a simpler query\n- Check if the API server is running: {API_BASE_URL}/health\n- The request may still be processing in the background"
+    except httpx.ConnectError as e:
+        yield f"🔌 Connection error: Cannot connect to API server.\n\n**Make sure:**\n- API server is running at {API_BASE_URL}\n- Check: `docker compose ps api`\n- Verify: `curl {API_BASE_URL}/health`"
     except httpx.RequestError as e:
-        yield f"Connection error: {str(e)}\nMake sure the API server is running at {API_BASE_URL}"
+        yield f"❌ Request error: {str(e)}\n\n**Check:**\n- API server status at {API_BASE_URL}/health\n- Server logs: `docker logs rag-api`"
     except Exception as e:
-        yield f"Unexpected error: {str(e)}"
+        yield f"❌ Unexpected error: {str(e)}\n\nPlease check the API server logs for more details."
 
 
 def create_gradio_interface():

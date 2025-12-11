@@ -8,6 +8,25 @@ from ..services.ollama import OllamaClient
 router = APIRouter()
 
 
+@router.get("", tags=["Root"])
+@router.get("/", tags=["Root"])
+async def root():
+    """Root endpoint showing available API endpoints."""
+    return {
+        "message": "arXiv Paper Curator API",
+        "version": "0.1.0",
+        "endpoints": {
+            "health": "/api/v1/health",
+            "ask": "/api/v1/ask",
+            "stream": "/api/v1/stream",
+            "hybrid_search": "/api/v1/hybrid-search/",
+            "docs": "/docs",
+            "openapi": "/openapi.json"
+        },
+        "description": "RAG system for querying arXiv CS.AI papers"
+    }
+
+
 @router.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health_check(settings: SettingsDep, database: DatabaseDep, opensearch_client: OpenSearchDep) -> HealthResponse:
     """Comprehensive health check endpoint for monitoring and load balancer probes.

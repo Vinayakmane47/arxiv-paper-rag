@@ -86,6 +86,24 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Root endpoint for /api/v1
+@app.get("/api/v1", tags=["Root"])
+async def api_root():
+    """Root endpoint showing available API endpoints."""
+    return {
+        "message": "arXiv Paper Curator API",
+        "version": os.getenv("APP_VERSION", "0.1.0"),
+        "endpoints": {
+            "health": "/api/v1/health",
+            "ask": "/api/v1/ask",
+            "stream": "/api/v1/stream",
+            "hybrid_search": "/api/v1/hybrid-search/",
+            "docs": "/docs",
+            "openapi": "/openapi.json"
+        },
+        "description": "RAG system for querying arXiv CS.AI papers"
+    }
+
 # Include routers
 app.include_router(ping.router, prefix="/api/v1")  # Health check endpoint
 app.include_router(hybrid_search.router, prefix="/api/v1")  # Search chunks with BM25/hybrid
