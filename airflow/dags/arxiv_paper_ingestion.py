@@ -44,6 +44,10 @@ fetch_task = PythonOperator(
     task_id="fetch_daily_papers",
     python_callable=fetch_daily_papers,
     dag=dag,
+    # Increase timeout to 30 minutes for PDF processing
+    execution_timeout=timedelta(minutes=30),
+    # Increase task retry timeout
+    retry_delay=timedelta(minutes=5),
 )
 
 # Hybrid search indexing task (replaces old OpenSearch task)
