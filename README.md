@@ -43,7 +43,7 @@
 
 ### **📋 Prerequisites**
 
-- **Docker Desktop** (with Docker Compose)
+- **Docker Desktop** (with Docker Compose)  
 - **Python 3.12+**
 - **UV Package Manager** ([Install Guide](https://docs.astral.sh/uv/getting-started/installation/))
 - **8GB+ RAM** and **20GB+ free disk space**
@@ -86,6 +86,12 @@ curl http://localhost:8000/api/v1/health
 ---
 
 ## 🏗️ Architecture
+
+<p align="center">
+  <img src="project_arch.png" alt="System Architecture Diagram" width="900">
+  <br>
+  <em>Complete system architecture showing all components and data flow</em>
+</p>
 
 ### **System Components**
 
@@ -151,10 +157,10 @@ async def ask_question(query: str):
         response = await client.post(
             "http://localhost:8000/api/v1/ask",
             json={
-                "query": query,
-                "top_k": 3,
-                "use_hybrid": True,
-                "model": "llama3.2:1b"
+            "query": query,
+            "top_k": 3,
+            "use_hybrid": True,
+            "model": "llama3.2:1b"
             }
         )
         result = response.json()
